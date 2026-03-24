@@ -1,0 +1,43 @@
+### Variáveis — ajuste a porta se o uvicorn usar outra
+@baseUrl = http://127.0.0.1:8000
+@alunoId = 1
+
+### Raiz (redireciona 307 para /alunos)
+GET {{baseUrl}}/
+
+###
+
+### Listar todos os alunos
+GET {{baseUrl}}/alunos
+Accept: application/json
+
+###
+
+### Criar aluno
+POST {{baseUrl}}/alunos
+Content-Type: application/json
+
+{
+  "nome": "Maria Silva",
+  "email": "maria@exemplo.com",
+  "data_nascimento": "2003-08-20"
+}
+
+###
+
+### Atualizar aluno pelo id (altere @alunoId acima)
+PUT {{baseUrl}}/alunos/{{alunoId}}
+Content-Type: application/json
+
+{
+  "nome": "Maria Silva Santos",
+  "email": "maria.santos@exemplo.com",
+  "data_nascimento": "2003-08-20"
+}
+
+###
+
+### Excluir aluno pelo id (altere @alunoId acima)
+DELETE {{baseUrl}}/alunos/{{alunoId}}
+
+###
