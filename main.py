@@ -25,6 +25,7 @@ class AlunoCriar(BaseModel):
     nome: str
     email: str
     data_nascimento: date
+    status: bool = True
 
 
 @app.get("/")
@@ -67,9 +68,9 @@ def criar_aluno(aluno: AlunoCriar):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                'INSERT INTO "ALUNOS" (nome, email, data_nascimento) '
-                "VALUES (%s, %s, %s) RETURNING *;",
-                (aluno.nome, aluno.email, aluno.data_nascimento),
+                'INSERT INTO "ALUNOS" (nome, email, data_nascimento, status) '
+                "VALUES (%s, %s, %s, %s) RETURNING *;",
+                (aluno.nome, aluno.email, aluno.data_nascimento, aluno.status),
             )
             colunas = [desc[0] for desc in cur.description]
             row = cur.fetchone()
@@ -89,9 +90,9 @@ def atualizar_aluno(aluno_id: int, aluno: AlunoCriar):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                'UPDATE "ALUNOS" SET nome = %s, email = %s, data_nascimento = %s '
+                'UPDATE "ALUNOS" SET nome = %s, email = %s, data_nascimento = %s, status = %s '
                 "WHERE id = %s RETURNING *;",
-                (aluno.nome, aluno.email, aluno.data_nascimento, aluno_id),
+                (aluno.nome, aluno.email, aluno.data_nascimento, aluno.status, aluno_id),
             )
             row = cur.fetchone()
             if row is None:
