@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alunos — CRUD</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; line-height: 1.4; }
+    body { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-size: 1.35rem; margin-top: 0; }
+    fieldset { border: 1px solid #ccc; border-radius: 6px; padding: 1rem 1rem 0.75rem; margin-bottom: 1.25rem; }
+    legend { padding: 0 0.35rem; font-weight: 600; }
+    label { display: block; margin-bottom: 0.65rem; }
+    label span { display: inline-block; min-width: 8.5rem; }
+    input[type="text"], input[type="email"], input[type="date"] { width: min(100%, 20rem); padding: 0.35rem 0.5rem; }
+    .acoes-form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0 0.25rem; align-items: center; }
+    button { cursor: pointer; padding: 0.4rem 0.75rem; border-radius: 4px; border: 1px solid #333; background: #fff; }
+    button.primary { background: #1a5fb4; color: #fff; border-color: #164a8c; }
+    button.danger { color: #c01c28; border-color: #c01c28; }
+    button.ghost { border-color: #999; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+    th, td { border: 1px solid #ddd; padding: 0.45rem 0.6rem; text-align: left; }
+    th { background: #f4f4f4; }
+    .col-acoes { white-space: nowrap; }
+    .col-acoes button { margin-right: 0.25rem; }
+    #erro { color: #c01c28; white-space: pre-wrap; margin: 0.5rem 0; }
+    #feedback { color: #1a5f1a; margin: 0.5rem 0; min-height: 1.2em; }
+    .toolbar { margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>Alunos</h1>
+
+  <fieldset>
+    <legend id="legendForm">Novo aluno</legend>
+    <form id="formAluno">
+      <input type="hidden" id="editId" value="">
+      <label><span>Nome</span> <input type="text" id="nome" name="nome" required autocomplete="name"></label>
+      <label><span>E-mail</span> <input type="email" id="email" name="email" required autocomplete="email"></label>
+      <label><span>Data de nascimento</span> <input type="date" id="data_nascimento" name="data_nascimento" required></label>
+      <div class="acoes-form">
+        <button type="submit" class="primary" id="btnSubmit">Cadastrar</button>
+        <button type="button" class="ghost" id="btnCancelarEdicao" hidden>Cancelar edição</button>
+      </div>
+    </form>
+  </fieldset>
+
+  <div class="toolbar">
+    <button type="button" id="btnAtualizarLista">Atualizar lista</button>
+  </div>
+  <div id="feedback" aria-live="polite"></div>
+  <pre id="erro"></pre>
+  <div id="lista"></div>
+
+  <script>
+    // Se abrir o HTML pelo disco (file://), /alunos não aponta para o FastAPI — usa a URL do servidor local.
+    const API_BASE =
+      window.location.protocol === "file:"
+        ? "http://127.0.0.1:8000"
+        : window.location.origin;
+    const API_ALUNOS = API_BASE + "/alunos";
+    const lista = document.getElementById("lista");
+    const erro = document.getElementById("erro");
+    const feedback = document.getElementById("feedback");
+    const form = document.getElementById("formAluno");
+    const editId = document.getElementById("editId");
+    const nome = document.getElementById("nome");
+    const emailEl = document.getElementById("email");
+    const dataNascimento = document.getElementById("data_nascimento");
+    const btnSubmit = document.getElementById("btnSubmit");
+    const btnCancelarEdicao = document.getElementById("btnCancelarEdicao");
+    const legendForm = document.getElementById("legendForm");
+
+    function limparErro() { erro.textContent = ""; }
+    function mostrarErro(msg) { erro.textContent = msg; feedback.textContent = ""; }
+    function mensagemFalhaRede(e, titulo) {
+      const t = titulo || "Falha de rede ou ao processar a resposta";
+      let msg = t + ": " + e.message;
+      const m = String(e.message || "");
+      if (m.includes("fetch") || m.includes("Failed") || m.includes("NetworkError")) {
+        msg +=
+          "\n\n• O servidor está ligado? (ex.: uvicorn main:app --reload)\n" +
+          "• Abra a página em http://127.0.0.1:8000/home — não abra alunos.html pelo Explorador de ficheiros (file://).";
+      }
+      return msg;
+    }
+    function mostrarFeedback(msg) { feedback.textContent = msg; setTimeout(() => { feedback.textContent = ""; }, 3500); }
+
+    function formatarDataInput(valor) {
+      if (!valor) return "";
+      if (typeof valor === "string" && valor.length >= 10) return valor.slice(0, 10);
+      return String(valor);
+    }
+
+    function resetFormularioNovo() {
+      editId.value = "";
+      form.reset();
+      btnSubmit.textContent = "Cadastrar";
+      legendForm.textContent = "Novo aluno";
+      btnCancelarEdicao.hidden = true;
+    }
+
+    function iniciarEdicao(aluno) {
+      editId.value = String(aluno.id);
+      nome.value = aluno.nome ?? "";
+      emailEl.value = aluno.email ?? "";
+      dataNascimento.value = formatarDataInput(aluno.data_nascimento);
+      btnSubmit.textContent = "Salvar alterações";
+      legendForm.textContent = "Editar aluno";
+      btnCancelarEdicao.hidden = false;
+      limparErro();
+      nome.focus();
+    }
+
+    btnCancelarEdicao.addEventListener("click", resetFormularioNovo);
+
+    async function listarAlunos() {
+      limparErro();
+      lista.replaceChildren();
+
+      try {
+        const response = await fetch(API_ALUNOS);
+        if (!response.ok) {
+          const texto = await response.text();
+          mostrarErro("Erro " + response.status + ": " + texto);
+          return;
+        }
+        const dados = await response.json();
+        if (!Array.isArray(dados)) {
+          mostrarErro("Resposta inesperada: esperava um array JSON.");
+          return;
+        }
+        if (dados.length === 0) {
+          const p = document.createElement("p");
+          p.textContent = "Nenhum aluno cadastrado.";
+          lista.appendChild(p);
+          return;
+        }
+
+        const colunas = Object.keys(dados[0]).filter((c) => c !== "id");
+        colunas.unshift("id");
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const trHead = document.createElement("tr");
+        for (const col of colunas) {
+          const th = document.createElement("th");
+          th.textContent = col;
+          trHead.appendChild(th);
+        }
+        const thAcoes = document.createElement("th");
+        thAcoes.textContent = "Ações";
+        thAcoes.className = "col-acoes";
+        trHead.appendChild(thAcoes);
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        for (const aluno of dados) {
+          const tr = document.createElement("tr");
+          for (const col of colunas) {
+            const td = document.createElement("td");
+            const valor = aluno[col];
+            td.textContent = valor !== null && valor !== undefined ? String(valor) : "";
+            tr.appendChild(td);
+          }
+          const tdAcoes = document.createElement("td");
+          tdAcoes.className = "col-acoes";
+          const btnEditar = document.createElement("button");
+          btnEditar.type = "button";
+          btnEditar.textContent = "Editar";
+          btnEditar.addEventListener("click", () => iniciarEdicao(aluno));
+          const btnExcluir = document.createElement("button");
+          btnExcluir.type = "button";
+          btnExcluir.className = "danger";
+          btnExcluir.textContent = "Excluir";
+          btnExcluir.addEventListener("click", () => excluirAluno(aluno.id));
+          tdAcoes.appendChild(btnEditar);
+          tdAcoes.appendChild(btnExcluir);
+          tr.appendChild(tdAcoes);
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        lista.appendChild(table);
+      } catch (e) {
+        mostrarErro(mensagemFalhaRede(e));
+      }
+    }
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      limparErro();
+      const payload = {
+        nome: nome.value.trim(),
+        email: emailEl.value.trim(),
+        data_nascimento: dataNascimento.value,
+      };
+      const idAtual = editId.value;
+      const isEdicao = idAtual !== "";
+      const url = isEdicao ? API_ALUNOS + "/" + encodeURIComponent(idAtual) : API_ALUNOS;
+      const method = isEdicao ? "PUT" : "POST";
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const texto = await response.text();
+          mostrarErro("Erro " + response.status + ": " + texto);
+          return;
+        }
+        if (isEdicao) await response.json();
+        else await response.json();
+        mostrarFeedback(isEdicao ? "Aluno atualizado." : "Aluno cadastrado.");
+        resetFormularioNovo();
+        await listarAlunos();
+      } catch (e) {
+        mostrarErro(mensagemFalhaRede(e, "Falha ao enviar"));
+      }
+    });
+
+    async function excluirAluno(id) {
+      if (!confirm("Excluir este aluno?")) return;
+      limparErro();
+      try {
+        const response = await fetch(API_ALUNOS + "/" + encodeURIComponent(id), { method: "DELETE" });
+        if (response.status === 204) {
+          mostrarFeedback("Aluno excluído.");
+          if (editId.value === String(id)) resetFormularioNovo();
+          await listarAlunos();
+          return;
+        }
+        const texto = await response.text();
+        mostrarErro("Erro " + response.status + ": " + texto);
+      } catch (e) {
+        mostrarErro(mensagemFalhaRede(e, "Falha ao excluir"));
+      }
+    }
+
+    document.getElementById("btnAtualizarLista").addEventListener("click", listarAlunos);
+    listarAlunos();
+  </script>
+</body>
+</html>

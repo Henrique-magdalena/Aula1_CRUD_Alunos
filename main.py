@@ -1,12 +1,24 @@
 from datetime import date
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from conexao_supabase import obter_conexao
 
+BASE_DIR = Path(__file__).resolve().parent
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class AlunoCriar(BaseModel):
@@ -17,8 +29,14 @@ class AlunoCriar(BaseModel):
 
 @app.get("/")
 def raiz():
-    """A lista de alunos está em /alunos — a raiz não tem outro conteúdo."""
-    return RedirectResponse(url="/alunos", status_code=307)
+    """Redireciona para a tela CRUD em /home."""
+    return RedirectResponse(url="/home", status_code=307)
+
+
+@app.get("/home")
+def tela_crud_alunos():
+    """Serve a página HTML do CRUD de alunos."""
+    return FileResponse(BASE_DIR / "alunos.html", media_type="text/html; charset=utf-8")
 
 
 @app.get("/alunos")
